@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Lutadores do Brasil - Sistema de Rounds e Cenários</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    * { box-sizing: border-box; }
+    body {
+      background-color: #000; color: #fff;
+      font-family: 'Press Start 2P', monospace;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      min-height: 100vh; margin: 0;
+    }
+    #game-container {
+      position: relative; width: 800px; height: 450px;
+      border: 4px solid #444; box-shadow: 0 0 30px rgba(0, 0, 0, 0.9);
+      overflow: hidden; background: #000;
+    }
+    canvas { background: #000; display: block; image-rendering: pixelated; }
+    
+    .hud {
+      position: absolute; top: 12px; left: 15px; right: 15px;
+      display: flex; justify-content: space-between; align-items: flex-start;
+      pointer-events: none; z-index: 5;
+    }
+    .hud-box { display: flex; flex-direction: column; gap: 4px; }
+    
+    .health-box {
+      width: 280px; height: 18px; background: rgba(0,0,0,0.8); border: 2px solid #aaa;
+      position: relative; overflow: hidden; box-shadow: inset 0 0 5px #000;
+    }
+    .health-bar {
+      height: 100%; background: linear-gradient(90deg, #ff0055, #ffcc00);
+      width: 100%; transition: width 0.1s ease-out;
+    }
+    .p2-bar { float: right; }
+
+    /* Marcadores de Rounds */
+    .rounds-box { display: flex; gap: 6px; margin-top: 2px; }
+    .round-dot {
+      width: 10px; height: 10px; border: 1.5px solid #fff;
+      border-radius: 50%; background: #222;
+    }
+    .round-dot.active { background: #ffcc00; box-shadow: 0 0 6px #ffcc00; }
+
+    .special-box {
+      width: 200px; height: 10px; background: rgba(0,0,0,0.8); border: 1.5px solid #555;
+      position: relative; overflow: hidden;
+    }
+    .special-bar {
+      height: 100%; background: linear-gradient(90deg, #00d2ff, #0045ff);
+      width: 0%; transition: width 0.1s ease-out;
+    }
+    .special-full {
+      background: linear-gradient(90deg, #00ffff, #ffffff) !important;
+      box-shadow: 0 0 8px #00ffff;
+    }
+
+    .fighter-name { font-size: 9px; text-shadow: 2px 2px #000; color: #ffcc00; }
+    
+    .stage-title {
+      position: absolute; bottom: 8px; width: 100%; text-align: center;
+      font-size: 9px; color: #fff; text-shadow: 2px 2px 4px #000;
+      pointer-events: none; z-index: 5; background: rgba(0,0,0,0.7); padding: 4px 0;
+    }
+
+    /* MENUS ESTILO MORTAL KOMBAT */
+    .menu-screen {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(circle, #333 0%, #111 100%);
+      display: flex; flex-direction: column;
+      justify-content: center; align-items: center; z-index: 20;
+    }
+
+    /* TELA INICIAL (TITLE SCREEN) */
+    #start-screen {
+      background: url('cenario0.png') no-repeat center center/cover, #000;
+      cursor: pointer;
+    }
+
+    .press-start-text {
+      position: absolute;
+      bottom: 40px;
+      font-size: 11px;
+      color: #ffeb3b;
+      text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;
+      animation: blink 1.2s infinite;
+      background: rgba(0, 0, 0, 0.6);
+      padding: 10px 20px;
+      border-radius: 6px;
+      border: 1px solid #ffeb3b;
+    }
+
+    @keyframes blink {
+      0%, 49% { opacity: 1; }
+      50%, 100% { opacity: 0; }
+    }
+
+    .stone-frame {
+      background: #5a5a5a;
+      border: 5px solid #222;
+      box-shadow: inset 3px 3px 0px #888, inset -3px -3px 0px #222, 0 0 20px #000;
+      padding: 12px; display: flex; flex-direction: column; align-items: center;
+    }
+
+    .menu-screen h1 {
+      font-size: 15px; color: #ffeb3b; 
+      text-shadow: 2px 2px 0 #8b0000; margin-bottom: 12px;
+      text-transform: uppercase; letter-spacing: 1px;
+    }
+
+    /* Grid do Menu de Personagens e Cenários */
+    .grid-select {
+      display: grid; grid-template-columns: repeat(5, 95px); gap: 8px;
+    }
+
+    .grid-select-stages {
+      display: grid; grid-template-columns: repeat(4, 120px); gap: 10px;
+    }
+
+    .card-char {
+      width: 95px; height: 90px; background: #111; border: 3px solid #3a3a3a;
+      box-shadow: inset 2px 2px 0 #666, inset -2px -2px 0 #111;
+      cursor: pointer; user-select: none;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+      padding: 4px;
+    }
+
+    .card-char img { height: 58px; width: 100%; object-fit: contain; image-rendering: pixelated; }
+    .card-char span { font-size: 6.5px; color: #ccc; text-align: center; line-height: 8px; width: 100%; overflow: hidden; white-space: nowrap; }
+
+    .card-stage {
+      width: 120px; height: 95px; background: #111; border: 3px solid #3a3a3a;
+      box-shadow: inset 2px 2px 0 #666, inset -2px -2px 0 #111;
+      cursor: pointer; user-select: none;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+      padding: 4px;
+    }
+
+    .card-stage img { 
+      height: 55px; width: 100%; object-fit: cover; border: 1px solid #222;
+    }
+    
+    .card-stage-placeholder {
+      height: 55px; width: 100%; background: #222; color: #ffeb3b;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: bold; border: 1px solid #333;
+    }
+
+    .card-stage span { 
+      font-size: 6px; color: #ccc; text-align: center; line-height: 8px; 
+      width: 100%; height: 24px; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .card-char.selected, .card-stage.selected {
+      border-color: #00ff00; box-shadow: 0 0 12px #00ff00, inset 0 0 8px #00ff00; background: #002200;
+    }
+    .card-char.selected span, .card-stage.selected span { color: #00ff00; font-weight: bold; }
+
+    .select-hint { margin-top: 10px; font-size: 8px; color: #ffeb3b; text-align: center; }
+
+    .speech-bubble {
+      position: absolute; background: #fff; color: #000;
+      padding: 6px 10px; border-radius: 4px; font-size: 9px; font-weight: bold;
+      border: 2px solid #000; pointer-events: none; z-index: 6; display: none;
+      white-space: nowrap; font-family: sans-serif;
+    }
+
+    #winner-overlay {
+      display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.88); flex-direction: column;
+      justify-content: center; align-items: center; z-index: 10;
+    }
+
+    #winner-text { 
+      font-size: 18px; font-weight: bold; color: #ffeb3b; 
+      text-shadow: 2px 2px 0px #000; text-align: center; line-height: 28px;
+    }
+
+    .controls-info {
+      margin-top: 12px; font-size: 8.5px; color: #eee;
+      text-align: center; background: #111; padding: 10px 20px;
+      border-radius: 8px; border: 2px solid #444; line-height: 16px;
+    }
+    .controls-info b { color: #ffcc00; }
+  </style>
+</head>
+<body>
+
+  <div id="game-container">
+    <!-- TELA INICIAL (TITLE SCREEN) -->
+    <div id="start-screen" class="menu-screen" onclick="goToCharMenu()">
+      <div class="press-start-text">PRESS ANY KEY TO START</div>
+    </div>
+
+    <!-- MENU DE SELEÇÃO DE PERSONAGEM -->
+    <div id="select-char-menu" class="menu-screen" style="display: none;">
+      <div class="stone-frame">
+        <h1>CHOOSE YOUR FIGHTER</h1>
+        <div class="grid-select" id="grid-char"></div>
+        <div class="select-hint">USE [WASD/SETAS] E APERTE [ENTER] OU CLIQUE</div>
+      </div>
+    </div>
+
+    <!-- MENU DE SELEÇÃO DE CENÁRIO (ESTILO GRID) -->
+    <div id="select-stage-menu" class="menu-screen" style="display: none;">
+      <div class="stone-frame">
+        <h1>CHOOSE THE BATTLEGROUND</h1>
+        <div class="grid-select-stages" id="grid-stage"></div>
+        <div class="select-hint">USE [WASD/SETAS] E APERTE [ENTER] OU CLIQUE</div>
+      </div>
+    </div>
+
+    <div class="hud">
+      <div class="hud-box">
+        <div class="fighter-name" id="p1-label">P1</div>
+        <div class="health-box"><div id="p1-hp" class="health-bar"></div></div>
+        <div class="special-box"><div id="p1-sp" class="special-bar"></div></div>
+        <div class="rounds-box">
+          <div id="p1-r1" class="round-dot"></div>
+          <div id="p1-r2" class="round-dot"></div>
+        </div>
+      </div>
+      
+      <div class="hud-box" style="align-items: flex-end;">
+        <div class="fighter-name" id="p2-label">P2 (IA)</div>
+        <div class="health-box"><div id="p2-hp" class="health-bar p2-bar"></div></div>
+        <div class="special-box"><div id="p2-sp" class="special-bar p2-bar"></div></div>
+        <div class="rounds-box">
+          <div id="p2-r1" class="round-dot"></div>
+          <div id="p2-r2" class="round-dot"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stage-title" id="stage-title">CENÁRIO HISTÓRICO</div>
+
+    <div id="speech-p1" class="speech-bubble"></div>
+    <div id="speech-p2" class="speech-bubble"></div>
+    
+    <div id="winner-overlay">
+      <div id="winner-text">ROUND 1</div>
+    </div>
+
+    <canvas id="stage" width="800" height="450"></canvas>
+  </div>
+
+  <div class="controls-info">
+    <p><b>Controles:</b> [W/A/D] Mover/Pular | <b>[J]</b> Ataque | <b>[K]</b> Especial (Barra Azul Cheia)</p>
+  </div>
+
+<script>
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+const GRAVITY = 0.6;
+const GROUND_Y = 210; 
+
+let gameOver = false;
+let gameStarted = false;
+let currentMenu = 'start'; 
+
+// Progresso de vitórias e dificuldade acumulada
+let p1WinStreak = 0; 
+let difficultyMultiplier = 1.0; 
+
+// Placar do Match Atual (Melhor de 3)
+let p1Rounds = 0;
+let p2Rounds = 0;
+
+const STAGES = [
+  { id: 'random', name: "RANDOM", label: "ALEATÓRIO" },
+  { id: 'cenario1', name: "Independência (1822)", label: "1. INDEPENDÊNCIA" },
+  { id: 'cenario2', name: "Família Real (1808)", label: "2. FAMÍLIA REAL" },
+  { id: 'cenario3', name: "Aclamação D. Pedro I", label: "3. ACLAMAÇÃO" },
+  { id: 'cenario4', name: "Mercado de Escravos", label: "4. MERCADO" },
+  { id: 'cenario5', name: "Revolta dos Malês", label: "5. MALÊS (1835)" },
+  { id: 'cenario6', name: "Abolição (1888)", label: "6. ABOLIÇÃO" },
+  { id: 'cenario7', name: "República (1889)", label: "7. REPÚBLICA" }
+];
+
+const stageImages = {};
+STAGES.forEach(stage => {
+  if (stage.id !== 'random') {
+    const img = new Image();
+    img.src = `${stage.id}.png`;
+    stageImages[stage.id] = img;
+  }
+});
+
+let currentStage = STAGES[1];
+
+const CHARACTERS = [
+  { id: 'dpedroi', name: 'D. Pedro I', quote: "Independência ou Morte!" },
+  { id: 'dpedroii', name: 'D. Pedro II', quote: "A educação é a base do progresso." },
+  { id: 'josebonifacio', name: 'José Bonifácio', quote: "O Brasil precisa de ciência e virtude." },
+  { id: 'zumbidospalmares', name: 'Zumbi', quote: "Liberdade não se concede, se conquista!" },
+  { id: 'luisgama', name: 'Luís Gama', quote: "A lei deve ser igual para todos!" },
+  { id: 'maldeodoro', name: 'Deodoro', quote: "A República é o destino do Brasil!" },
+  { id: 'regentefeijo', name: 'Feijó', quote: "Precisamos manter a ordem e a unidade." },
+  { id: 'venturamina', name: 'Ventura Mina', quote: "Liberdade para o povo!" },
+  { id: 'andrereboucas', name: 'Rebouças', quote: "A engenharia constrói pontes para a liberdade." },
+  { id: 'mariaquiteria', name: 'M. Quitéria', quote: "Pelo Brasil defenderemos nossa Pátria!" }
+];
+
+const charSprites = {};
+CHARACTERS.forEach(char => {
+  charSprites[char.id] = {};
+  ['pose', 'andar', 'atacar', 'dano', 'comemorar'].forEach(action => {
+    const img = new Image();
+    img.src = `sprites_${action}_${char.id}.png`;
+    charSprites[char.id][action] = img;
+  });
+});
+
+let selectedCharIndex = 0;
+let selectedStageIndex = 0;
+let p1, p2;
+
+// Montagem do Menu de Personagens (Grid)
+const gridCharContainer = document.getElementById('grid-char');
+CHARACTERS.forEach((char, idx) => {
+  const div = document.createElement('div');
+  div.className = `card-char ${idx === 0 ? 'selected' : ''}`;
+  div.id = `char-${idx}`;
+  
+  const img = document.createElement('img');
+  img.src = `sprites_pose_${char.id}.png`;
+  
+  const label = document.createElement('span');
+  label.innerText = char.name.toUpperCase();
+
+  div.appendChild(img); div.appendChild(label);
+  div.onclick = () => { selectedCharIndex = idx; updateCharUI(); goToStageMenu(); };
+  gridCharContainer.appendChild(div);
+});
+
+// Montagem do Menu de Cenários (Grid 4x2)
+const gridStageContainer = document.getElementById('grid-stage');
+STAGES.forEach((stage, idx) => {
+  const div = document.createElement('div');
+  div.className = `card-stage ${idx === 0 ? 'selected' : ''}`;
+  div.id = `stage-${idx}`;
+  
+  if (stage.id === 'random') {
+    const placeholder = document.createElement('div');
+    placeholder.className = 'card-stage-placeholder';
+    placeholder.innerText = '?';
+    div.appendChild(placeholder);
+  } else {
+    const img = document.createElement('img');
+    img.src = `${stage.id}.png`;
+    div.appendChild(img);
+  }
+  
+  const label = document.createElement('span');
+  label.innerText = stage.label.toUpperCase();
+
+  div.appendChild(label);
+  div.onclick = () => { selectedStageIndex = idx; updateStageUI(); confirmMatchStart(); };
+  gridStageContainer.appendChild(div);
+});
+
+// Transição para a escolha de personagem
+function goToCharMenu() {
+  if (currentMenu !== 'start') return;
+  currentMenu = 'char';
+  document.getElementById('start-screen').style.display = 'none';
+  document.getElementById('select-char-menu').style.display = 'flex';
+}
+
+// Navegação pelos Menus
+window.addEventListener('keydown', e => {
+  if (gameStarted) return;
+  const key = e.key.toLowerCase();
+
+  if (currentMenu === 'start') {
+    goToCharMenu();
+  }
+  else if (currentMenu === 'char') {
+    if (key === 'd' || e.key === 'ArrowRight') selectedCharIndex = (selectedCharIndex + 1) % CHARACTERS.length;
+    if (key === 'a' || e.key === 'ArrowLeft') selectedCharIndex = (selectedCharIndex - 1 + CHARACTERS.length) % CHARACTERS.length;
+    if (key === 's' || e.key === 'ArrowDown') selectedCharIndex = (selectedCharIndex + 5) % CHARACTERS.length;
+    if (key === 'w' || e.key === 'ArrowUp') selectedCharIndex = (selectedCharIndex - 5 + CHARACTERS.length) % CHARACTERS.length;
+    updateCharUI();
+    if (e.key === 'Enter' || key === ' ') goToStageMenu();
+  } 
+  else if (currentMenu === 'stage') {
+    if (key === 'd' || e.key === 'ArrowRight') selectedStageIndex = (selectedStageIndex + 1) % STAGES.length;
+    if (key === 'a' || e.key === 'ArrowLeft') selectedStageIndex = (selectedStageIndex - 1 + STAGES.length) % STAGES.length;
+    if (key === 's' || e.key === 'ArrowDown') selectedStageIndex = (selectedStageIndex + 4) % STAGES.length;
+    if (key === 'w' || e.key === 'ArrowUp') selectedStageIndex = (selectedStageIndex - 4 + STAGES.length) % STAGES.length;
+    updateStageUI();
+    if (e.key === 'Enter' || key === ' ') confirmMatchStart();
+  }
+});
+
+function updateCharUI() {
+  CHARACTERS.forEach((_, idx) => {
+    const el = document.getElementById(`char-${idx}`);
+    if (idx === selectedCharIndex) el.classList.add('selected'); else el.classList.remove('selected');
+  });
+}
+
+function updateStageUI() {
+  STAGES.forEach((_, idx) => {
+    const el = document.getElementById(`stage-${idx}`);
+    if (idx === selectedStageIndex) el.classList.add('selected'); else el.classList.remove('selected');
+  });
+}
+
+function goToStageMenu() {
+  currentMenu = 'stage';
+  document.getElementById('select-char-menu').style.display = 'none';
+  document.getElementById('select-stage-menu').style.display = 'flex';
+}
+
+function confirmMatchStart() {
+  p1Rounds = 0; p2Rounds = 0;
+  updateRoundsHUD();
+
+  // Seleção do Cenário
+  if (selectedStageIndex === 0) {
+    let rand = Math.floor(Math.random() * (STAGES.length - 1)) + 1;
+    currentStage = STAGES[rand];
+  } else {
+    currentStage = STAGES[selectedStageIndex];
+  }
+  document.getElementById('stage-title').innerText = currentStage.name.toUpperCase();
+
+  // Seleção do Oponente
+  const p1Data = CHARACTERS[selectedCharIndex];
+  let availableP2 = CHARACTERS.filter((_, idx) => idx !== selectedCharIndex);
+  const p2Data = availableP2[Math.floor(Math.random() * availableP2.length)];
+
+  document.getElementById('p1-label').innerText = `${p1Data.name.toUpperCase()} (P1)`;
+  document.getElementById('p2-label').innerText = `${p2Data.name.toUpperCase()} (CPU Lv.${p1WinStreak + 1})`;
+  
+  document.getElementById('select-stage-menu').style.display = 'none';
+
+  startRound(p1Data, p2Data);
+}
+
+function startRound(p1Data, p2Data) {
+  p1 = new Fighter({ x: 120, charData: p1Data, facingRight: true, isAI: false, hudId: 'speech-p1' });
+  p2 = new Fighter({ x: 550, charData: p2Data, facingRight: false, isAI: true, hudId: 'speech-p2' });
+
+  gameStarted = true;
+  gameOver = false;
+}
+
+class Fighter {
+  constructor({ x, charData, facingRight, isAI = false, hudId }) {
+    this.initialX = x; this.x = x; this.y = GROUND_Y;
+    this.w = 135; this.h = 180; 
+    
+    this.vx = 0; this.vy = 0;
+    this.hp = 100; this.sp = 0;
+
+    this.data = charData;
+    this.isGrounded = true; this.isAttacking = false;
+    this.attackType = null; this.attackFrame = 0;
+    this.facingRight = facingRight; this.isAI = isAI;
+    this.aiDecisionTimer = 0; this.animTimer = 0;
+    this.hudId = hudId;
+    this.state = 'pose';
+    this.isHurt = false;
+  }
+
+  draw() {
+    ctx.save();
+    const currentImg = charSprites[this.data.id][this.state];
+
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.beginPath(); 
+    ctx.ellipse(this.x + (this.w / 2), GROUND_Y + this.h - 5, 45, 12, 0, 0, Math.PI * 2); 
+    ctx.fill();
+
+    if (currentImg && currentImg.complete && currentImg.width > 0) {
+      if (!this.facingRight) {
+        ctx.translate(this.x + this.w, this.y);
+        ctx.scale(-1, 1);
+        ctx.drawImage(currentImg, 0, 0, this.w, this.h);
+      } else {
+        ctx.drawImage(currentImg, this.x, this.y, this.w, this.h);
+      }
+    } else {
+      ctx.fillStyle = this.facingRight ? '#3498db' : '#e74c3c';
+      ctx.fillRect(this.x, this.y, this.w, this.h);
+    }
+    ctx.restore();
+
+    const bubble = document.getElementById(this.hudId);
+    if (this.state === 'atacar' && this.attackType === 'special') {
+      bubble.style.display = 'block';
+      bubble.innerText = this.data.quote;
+      bubble.style.left = `${this.x + 10}px`;
+      bubble.style.top = `${this.y - 35}px`;
+    } else if (!gameOver) {
+      bubble.style.display = 'none';
+    }
+  }
+
+  update(opponent) {
+    if (gameOver || !gameStarted) return;
+    this.animTimer++;
+    this.facingRight = this.x < opponent.x;
+
+    this.vy += GRAVITY; this.y += this.vy;
+    if (this.y >= GROUND_Y) { this.y = GROUND_Y; this.vy = 0; this.isGrounded = true; }
+
+    this.x += this.vx;
+    this.x = Math.max(0, Math.min(canvas.width - this.w, this.x));
+
+    if (this.isHurt) this.state = 'dano';
+    else if (this.isAttacking) this.state = 'atacar';
+    else if (Math.abs(this.vx) > 0) this.state = 'andar';
+    else this.state = 'pose';
+
+    if (this.isAI && this.hp > 0) this.updateAI(opponent);
+
+    if (this.isAttacking) {
+      this.attackFrame++;
+      if (this.attackFrame === 5) {
+        const reach = this.attackType === 'special' ? 120 : 80;
+        const attackX = this.facingRight ? this.x + this.w : this.x - reach;
+        if (
+          attackX < opponent.x + opponent.w && attackX + reach > opponent.x &&
+          this.y + 30 < opponent.y + opponent.h && this.y + 120 > opponent.y
+        ) {
+          let baseDamage = this.attackType === 'special' ? 12 : 3;
+          if (this.isAI) baseDamage *= difficultyMultiplier;
+
+          opponent.takeDamage(baseDamage, this.facingRight);
+          
+          if (this.attackType === 'light') {
+            this.sp = Math.min(100, this.sp + 15);
+          }
+
+          checkRoundEnd(this, opponent);
+        }
+      }
+      if (this.attackFrame > 14) { this.isAttacking = false; this.attackFrame = 0; }
+    }
+  }
+
+  takeDamage(amount, fromRight) {
+    this.hp = Math.max(0, this.hp - amount);
+    this.sp = Math.min(100, this.sp + 7.5); 
+    this.isHurt = true;
+    this.vx = fromRight ? 6 : -6;
+    setTimeout(() => { this.isHurt = false; }, 180);
+  }
+
+  updateAI(opponent) {
+    this.aiDecisionTimer++;
+    const distance = Math.abs(this.x - opponent.x);
+    
+    const reactionTime = Math.max(5, Math.floor(12 / difficultyMultiplier));
+
+    if (this.aiDecisionTimer % reactionTime === 0) {
+      this.vx = 0;
+      if (distance > 100) {
+        this.vx = (this.facingRight ? 3.5 : -3.5) * Math.min(1.4, difficultyMultiplier);
+        if (Math.random() < 0.05) this.jump();
+      } else {
+        if (Math.random() < (0.6 * Math.min(1.3, difficultyMultiplier))) {
+          if (this.sp >= 100) this.attack('special');
+          else this.attack('light');
+        }
+      }
+    }
+  }
+
+  jump() { if (this.isGrounded && !gameOver && gameStarted) { this.vy = -13; this.isGrounded = false; } }
+  
+  attack(type) { 
+    if (!this.isAttacking && !gameOver && gameStarted) { 
+      if (type === 'special') {
+        if (this.sp < 100) return;
+        this.sp = 0;
+      }
+      this.isAttacking = true; this.attackType = type; this.attackFrame = 0; 
+    } 
+  }
+}
+
+const keys = {};
+window.addEventListener('keydown', e => {
+  const key = e.key.toLowerCase();
+  keys[key] = true;
+  if (!gameOver && gameStarted) {
+    if (key === 'w') p1.jump();
+    if (key === 'j') p1.attack('light');
+    if (key === 'k') p1.attack('special');
+  }
+});
+window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+function processInput() {
+  if (gameOver || !gameStarted) return;
+  p1.vx = 0;
+  if (keys['a']) p1.vx = -4;
+  if (keys['d']) p1.vx = 4;
+}
+
+function updateRoundsHUD() {
+  document.getElementById('p1-r1').className = `round-dot ${p1Rounds >= 1 ? 'active' : ''}`;
+  document.getElementById('p1-r2').className = `round-dot ${p1Rounds >= 2 ? 'active' : ''}`;
+  document.getElementById('p2-r1').className = `round-dot ${p2Rounds >= 1 ? 'active' : ''}`;
+  document.getElementById('p2-r2').className = `round-dot ${p2Rounds >= 2 ? 'active' : ''}`;
+}
+
+function checkRoundEnd(attacker, defender) {
+  if (defender.hp <= 0 && !gameOver) {
+    gameOver = true;
+    attacker.state = 'comemorar';
+    defender.state = 'dano';
+
+    const p1Data = p1.data;
+    const p2Data = p2.data;
+
+    if (attacker === p1) p1Rounds++; else p2Rounds++;
+    updateRoundsHUD();
+
+    const overlay = document.getElementById('winner-overlay');
+    
+    if (p1Rounds === 2 || p2Rounds === 2) {
+      const matchWinner = p1Rounds === 2 ? p1Data : p2Data;
+      
+      if (p1Rounds === 2) {
+        p1WinStreak++;
+        difficultyMultiplier += 0.03;
+      } else {
+        p1WinStreak = 0;
+        difficultyMultiplier = 1.0;
+      }
+
+      document.getElementById('winner-text').innerHTML = `
+        <span style="color:#ff0055; font-size:22px;">FINISH HIM!</span><br><br>
+        <span style="color:#fff; font-size:16px;">${matchWinner.name.toUpperCase()} WINS THE MATCH</span><br><br>
+        <span style="font-size:11px; color:#ffeb3b; font-family: sans-serif;">"${matchWinner.quote}"</span>
+      `;
+      overlay.style.display = 'flex';
+
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        document.getElementById('speech-p1').style.display = 'none';
+        document.getElementById('speech-p2').style.display = 'none';
+        gameStarted = false;
+        currentMenu = 'char';
+        document.getElementById('select-char-menu').style.display = 'flex';
+      }, 4000);
+
+    } else {
+      document.getElementById('winner-text').innerHTML = `
+        <span style="color:#ffeb3b; font-size:20px;">K.O.</span><br><br>
+        <span style="color:#fff; font-size:14px;">${attacker.data.name.toUpperCase()} WINS ROUND ${p1Rounds + p2Rounds}</span>
+      `;
+      overlay.style.display = 'flex';
+
+      setTimeout(() => {
+        overlay.style.display = 'none';
+        document.getElementById('speech-p1').style.display = 'none';
+        document.getElementById('speech-p2').style.display = 'none';
+        startRound(p1Data, p2Data);
+      }, 2500);
+    }
+  }
+}
+
+function renderHUD() {
+  if (!gameStarted) return;
+  
+  document.getElementById('p1-hp').style.width = `${p1.hp}%`;
+  document.getElementById('p2-hp').style.width = `${p2.hp}%`;
+
+  const p1SpBar = document.getElementById('p1-sp');
+  const p2SpBar = document.getElementById('p2-sp');
+
+  p1SpBar.style.width = `${p1.sp}%`;
+  p2SpBar.style.width = `${p2.sp}%`;
+
+  if (p1.sp >= 100) p1SpBar.classList.add('special-full'); else p1SpBar.classList.remove('special-full');
+  if (p2.sp >= 100) p2SpBar.classList.add('special-full'); else p2SpBar.classList.remove('special-full');
+}
+
+function renderBackground() {
+  const currentImg = stageImages[currentStage.id];
+  if (currentImg && currentImg.complete && currentImg.width > 0) {
+    ctx.drawImage(currentImg, 0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.fillStyle = '#1c3144'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(0, GROUND_Y + 175, canvas.width, 65);
+  }
+}
+
+function gameLoop() {
+  if (gameStarted) {
+    processInput();
+    p1.update(p2);
+    p2.update(p1);
+    renderBackground();
+    p1.draw();
+    p2.draw();
+    renderHUD();
+  }
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
